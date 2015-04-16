@@ -137,7 +137,7 @@ def read_pdfs(x,msp_names):
     i = 0
     for n in msp_names:
         name = '%.11s.pdf' % n
-        ln = np.genfromtxt(open(name))
+        ln = np.genfromtxt(open(name),comments='#')
         pdfs[i,:] = ln
         i += 1
     return pdfs 
@@ -189,7 +189,7 @@ def check_msp_number(samples,x,fnc,thres_min=1.9,thres_max=3.0,n_msps=19, size=3
 def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
     msp_names = []
     if fileonepk:
-        d1pk = np.genfromtxt(open(fileonepk),dtype=[('name','|S11'),('f0','f8'),('m','f8'),('ms','f8')])
+        d1pk = np.genfromtxt(open(fileonepk),dtype=[('name','|S11'),('f0','f8'),('m','f8'),('ms','f8')],comments='#')
         if verbose:
                 print
                 print
@@ -209,7 +209,7 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
 
                msp_names = np.append(msp_names,n) 
 
-    dgauss = np.genfromtxt(open(filegauss),dtype=[('name','|S11'),('m','f8'),('ms','f8')])
+    dgauss = np.genfromtxt(open(filegauss),dtype=[('name','|S11'),('m','f8'),('ms','f8')],comments='#')
     if verbose:
         print
         print
