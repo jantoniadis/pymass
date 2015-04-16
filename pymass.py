@@ -175,7 +175,14 @@ def plot_dist(samples,x,fnc=bimodal,cum=False):
         plt.plot(x,fnc(x,truths),color='b')
 
 
-
+def check_msp_number(samples,x,fnc,thres_min=1.9,thres_max=3.0,n_msps=19, size=300):
+    res = np.zeros(size)
+    i=0
+    for theta  in samples[np.random.randint(len(samples),size=size)]:
+        res[i] = n_msps*fnc(x,theta)[ (thres_min <= x) & (x <= thres_max)].sum()
+        i +=1
+    return res
+        
 
 
 
