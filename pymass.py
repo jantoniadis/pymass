@@ -3,7 +3,7 @@ import numpy as np
 from astropy.convolution import convolve, Box1DKernel
 from matplotlib import pylab as plt 
 from scipy.special import erf
-
+from scipy.special import gamma
 
 import argparse
 
@@ -60,6 +60,17 @@ def normal_exp_prior(theta):
     return -np.inf
 
 
+def gamma_dist(x,theta):
+    k,t = theta 
+    g = (1./(gamma(k)*t**k))*(x**(k-1.))*np.exp(-x/t)
+    return g/g.sum()
+
+def gamma_dist_prior(theta):
+    k,t = theta
+    if 1.00 < k < 100.6 and 0.001 < t < 1.7:
+        return 0.0
+    return -np.inf
+
 
 
 def bimodal(x,theta):
@@ -72,7 +83,7 @@ def bimodal(x,theta):
 
 def bimodal_prior(theta):
     mu1,s1,mu2,s2,r = theta
-    if 1.0 < mu1 < 1.6 and 0.005 < s1 < 0.5 and  1.0 < mu2 < 2.5 and 0.005 < s2 < 0.5 and 0.000 < r < 1.000:
+    if 1.0 < mu1 < 1.7 and 0.001 < s1 < 1.0 and  1.5 < mu2 < 2.5 and 0.001 < s2 < 1.0 and 0.000 < r < 1.000:
         return 0.0
     return -np.inf
 
@@ -161,18 +172,18 @@ def lnprob(theta, x, y,like, prior):
 
 
 
-def plot_dist(samples,x,fnc=bimodal,cum=False):
+def plot_dist(samples,x,fnc=bimodal,cum=False,scale=1,color='k'):
     for theta  in samples[np.random.randint(len(samples),size=100)]:
         if cum:
-            plt.plot(x,np.cumsum(fnc(x,theta)),color='k',alpha=0.1)
+            plt.plot(x,scale*np.cumsum(fnc(x,theta)),color=color,alpha=0.1)
         else:
-            plt.plot(x,fnc(x,theta),color='k',alpha=0.1)
+            plt.plot(x,scale*fnc(x,theta),color=color,alpha=0.1)
 
     truths = [np.percentile(sam,[50]) for sam in samples.T]
     if cum:
-        plt.plot(x,np.cumsum(fnc(x,truths)),color='b')
+        plt.plot(x,scale*np.cumsum(fnc(x,truths)),color='b')
     else:
-        plt.plot(x,fnc(x,truths),color='b')
+        plt.plot(x,scale*fnc(x,truths),color='b')
 
 
 def check_msp_number(samples,x,fnc,thres_min=1.9,thres_max=3.0,n_msps=19, size=300):
@@ -182,6 +193,11 @@ def check_msp_number(samples,x,fnc,thres_min=1.9,thres_max=3.0,n_msps=19, size=3
         res[i] = n_msps*fnc(x,theta)[ (thres_min <= x) & (x <= thres_max)].sum()
         i +=1
     return res
+
+
+def ashman(sample):
+    D = np.abs(samples[:,0] - samples[:,2]) / ((samples[:,1]**2. + samples[:,3]**2.)/2.)**0.5
+    return D
         
 
 
@@ -236,7 +252,7 @@ def P_Parser():
 
     parser.add_argument('-d1', '--data_meas',type=str, default='msps3.txt',
                         help='File containing NS mass measurements with gaussian uncertainties. The file must have 3 columns displaying the name, mean, and standard deviation (in Solar Masses)')
-    parser.add_argument('-d2', '--data_1pk',type=str, default='onepk.data',
+    parser.add_argument('-d2', '--data_1pk',type=str, default=None,
                         help='File containing the constraints on the total mass for systems that have only 1pk parameter determined \n The file must have 4 columns displaying the name, mass function, mean, and standard deviation on the Total Mass  (all in Solar Masses)')
 
     parser.add_argument('-c', '--calc',type=bool, default=False,help='Determines whether PDFs will be calculated or not')
@@ -247,11 +263,11 @@ def P_Parser():
     parser.add_argument('--threads',type=int, default=4,help='Number of CPU threads to use')
     parser.add_argument('-t', '--thin',type=int, default=10,help='MCMC thinning factor')
     parser.add_argument('-f', '--lnprob',type=str, default='bimodal',help='Distribution to fit',
-                        choices=['normal','bimodal','bimodal_cut','skewed_normal','skewed_normal_cut','normal_exp'])
+                        choices=['normal','bimodal','bimodal_cut','skewed_normal','skewed_normal_cut','normal_exp','gamma'])
     parser.add_argument('-i', '--init',type=str, default="1.4,0.1,1.96,0.1,0.5",help='Initial possition for the walkers')   
     parser.add_argument('-s', '--spread',type=float, default=1e-2,
                         help='Factor that regulates the scatter of the walkers around the initial parameters')  
-    parser.add_argument('--plots',type=bool, default=True,
+    parser.add_argument('--plots',type=bool, default=False,
                         help='Produce diagnostic plots at the end of the simulation') 
     return parser
 
@@ -261,21 +277,24 @@ likelihoods = {'normal':gauss,
                'bimodal_cut':bimodal_cut,
                'skewed_normal':skewed_norm, 
                'skewed_norm_cut':skewed_norm_cut, 
-               'normal_exp': normal_exp}
+               'normal_exp': normal_exp,
+               'gamma':gamma_dist}
 
 priors = {'normal':normal_prior,
           'bimodal':bimodal_prior,
           'bimodal_cut':bimodal_cut_prior,
           'skewed_normal':skewed_norm_prior, 
           'skewed_norm_cut':skewed_norm_cut_prior,
-          'normal_exp': normal_exp_prior}
+          'normal_exp': normal_exp_prior,
+          'gamma': gamma_dist_prior}
 
 labels={'normal': ["$\mu$","$\sigma$"],
         'bimodal': ["$\mu_1$","$\sigma_1$","$\mu_2$", "$\sigma_2$","$r$"],
         'bimodal_cut': ["$\mu_1$","$\sigma_1$","$\mu_2$","$\sigma_2$","$r$","$m_{max}$"],
         'skewed_normal': ["$\mu$","$\sigma$", "$a$"],
         'skewed_normal_cut': ["$\mu$","$\sigma$", "$a$","$m_{max}$"],
-        'normal_exp': ["$\mu$","$\sigma$", "$\lambda$"]}
+        'normal_exp': ["$\mu$","$\sigma$", "$\lambda$"],
+        'gamma':["k","$\theta$"]}
 
 
 if __name__ == "__main__":
