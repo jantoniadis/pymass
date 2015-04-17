@@ -1,4 +1,6 @@
 #!/bin/python
+
+
 import numpy as np
 from astropy.convolution import convolve, Box1DKernel
 from matplotlib import pylab as plt 
@@ -55,7 +57,7 @@ def normal_exp(x,theta):
     
 def normal_exp_prior(theta):
     mu,s ,l= theta
-    if 1.0 < mu < 2.5 and 0.001 < s < 1.0 and 1.0 < l < 10.0:
+    if 1.0 < mu < 2.0 and 0.01 < s < 1.0 and 1.0 < l < 25.0:
         return 0.0
     return -np.inf
 
@@ -230,7 +232,7 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
         print
         print
         print
-        print "Loading data for pulsars with 1 pK parameter from file {0}".format(fileonepk)
+        print "Loading data for pulsars with gaussian uncertainties from file {0}".format(fileonepk)
         print
         print
         print 
@@ -245,6 +247,53 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
     return pdfs, msp_names
 
 
+
+def output_results(samples,s_args,msp_names,plot=False):
+    print "Results based on mass measurements for:"
+    for pulsar in msp_names:
+        print pulsar
+    print
+    print
+    print
+    print "Distribution fitted: {0}".format(s_args.lnprob)
+    print "Results:"
+    i = 0
+    for med, mx, mn in map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),
+                             zip(*np.percentile(samples, [16, 50, 84],
+                                                axis=0))):
+        print "{0}: {1:.2f} +/- {2:.2f} / {3:.2f}".format(labels[s_args.lnprob][i],med,mx,mn)
+        i += 1
+        
+    print
+    print
+    c = check_msp_number(samples,x,fnc=bimodal,size=1000,thres_min=1.85)
+    c = np.nan_to_num(c)
+    mn, med, mx = np.percentile(c, [16, 50, 84])
+    mx = mx -med
+    mn = med - mn
+    print "Number of pulsars with m > 1.85 Msol predicted by the distribution is:"
+    print "{0:.2f} +/- {1:.2f} / {2:.2f}".format(med,mx,mn)
+    print
+    print
+    c = check_msp_number(samples,x,fnc=bimodal,size=1000,thres_min=1.85,n_msps=500)
+    c = np.nan_to_num(c)
+    mn, med, mx =  np.percentile(c, [16, 50, 84])
+    mx = mx-med
+    mn = med - mn
+    print "Number of pulsars with m > 1.85 Msol in the post-SKA Era (assuming 500 MSP mass measurements):"
+    print "{0:.2f} +/- {1:.2f} / {2:.2f}".format(med,mx,mn)
+    print
+    print
+    print
+    c = check_msp_number(samples,x,fnc=bimodal,size=1000,thres_min=2.1,thres_max=2.4,n_msps=500)
+    c = np.nan_to_num(c)
+    mn, med, mx =  np.percentile(c, [16, 50, 84])
+    mn = med - mn
+    mx = mx - med
+    print "Number of pulsars with 2.1 < m < 2.4 Msol in the post-SKA Era:" 
+    print "{0:.2f} +/- {1:.2f}/{2:.2f}".format(med,mx,mn)
+
+    
 
 def P_Parser():
     parser = argparse.ArgumentParser(prog='pymass.py', 
@@ -336,8 +385,14 @@ if __name__ == "__main__":
         for k in range(position.shape[0]):
             f.write("{0}\n".format(" ".join(map(str,position[k]))))
         f.close()
+
+
+    samples = np.genfromtxt(open(s_args.output))
+    if s_args.verbose:
+        output_results(samples,s_args,msp_names,plot=False)
+
+
     if s_args.plots:
-        samples = np.genfromtxt(open(s_args.output))
         truths = [np.percentile(sam,[50]) for sam in samples.T]
         label = labels[s_args.lnprob]
         plot_dist(samples,x,fnc=likelihoods[s_args.lnprob],cum=False)
