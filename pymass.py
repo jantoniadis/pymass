@@ -266,7 +266,7 @@ def output_results(samples,s_args,msp_names,plot=False):
         
     print
     print
-    c = check_msp_number(samples,x,fnc=bimodal,size=1000,thres_min=1.85)
+    c = check_msp_number(samples,x,fnc=s_args.lnprob,size=1000,thres_min=1.85)
     c = np.nan_to_num(c)
     mn, med, mx = np.percentile(c, [16, 50, 84])
     mx = mx -med
