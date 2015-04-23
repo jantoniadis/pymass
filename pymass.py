@@ -7,12 +7,14 @@ from matplotlib import pylab as plt
 from scipy.special import erf
 from scipy.special import gamma
 
+import time
+import sys
+
 import argparse
 
 import emcee
 import triangle
 
-lst_msp = ['J0348+0432','1738+0333','J1909-3744','J1910-5958','J1748-2446J','J1748-2446I']
 
 def pdf_onepk(xx,mm,f0,m0,ms):
     sini0 = (((1 + xx/(mm-xx))**2. * (mm-xx)**(-1.))*f0)**(1./3.)
@@ -204,11 +206,13 @@ def ashman(sample):
 
 
 
-def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
+def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=0):
     msp_names = []
     if fileonepk:
-        d1pk = np.genfromtxt(open(fileonepk),dtype=[('name','|S11'),('f0','f8'),('m','f8'),('ms','f8')],comments='#')
-        if verbose:
+        d1pk = np.genfromtxt(open(fileonepk),
+                             dtype=[('name','|S11'),('f0','f8'),('m','f8'),('ms','f8')],
+                             comments='#')
+        if verbose > 1:
                 print
                 print
                 print
@@ -221,14 +225,14 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
                    xx,mm = np.meshgrid(x,m)
                    t = pdf_onepk(xx,mm,f0,m0,ms)
                    np.savetxt('%.11s.pdf' % n,t)
-                   if verbose:
+                   if verbose > 1:
                         print "Calculating Mass PDF for pulsar {0}".format(n)
                        
 
                msp_names = np.append(msp_names,n) 
 
     dgauss = np.genfromtxt(open(filegauss),dtype=[('name','|S11'),('m','f8'),('ms','f8')],comments='#')
-    if verbose:
+    if verbose > 0:
         print
         print
         print
@@ -240,7 +244,7 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
         if calculate:
             t = normal(x,m0,ms)
             np.savetxt('%.11s.pdf' % n,t)
-            if verbose:
+            if verbose > 0:
                         print "Saving results to  %.11s.pdf" % n
         msp_names = np.append(msp_names,n)
     pdfs = read_pdfs(x,msp_names)
@@ -249,9 +253,6 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=True):
 
 
 def output_results(samples,s_args,msp_names,plot=False):
-    print "Results based on mass measurements for:"
-    for pulsar in msp_names:
-        print pulsar
     print
     print
     print
@@ -266,7 +267,7 @@ def output_results(samples,s_args,msp_names,plot=False):
         
     print
     print
-    c = check_msp_number(samples,x,fnc=s_args.lnprob,size=1000,thres_min=1.85)
+    c = check_msp_number(samples,x,fnc=likelihoods[s_args.lnprob],size=1000,thres_min=1.85)
     c = np.nan_to_num(c)
     mn, med, mx = np.percentile(c, [16, 50, 84])
     mx = mx -med
@@ -275,7 +276,7 @@ def output_results(samples,s_args,msp_names,plot=False):
     print "{0:.2f} +/- {1:.2f} / {2:.2f}".format(med,mx,mn)
     print
     print
-    c = check_msp_number(samples,x,fnc=bimodal,size=1000,thres_min=1.85,n_msps=500)
+    c = check_msp_number(samples,x,fnc=likelihoods[s_args.lnprob],size=1000,thres_min=1.85,n_msps=500)
     c = np.nan_to_num(c)
     mn, med, mx =  np.percentile(c, [16, 50, 84])
     mx = mx-med
@@ -285,7 +286,7 @@ def output_results(samples,s_args,msp_names,plot=False):
     print
     print
     print
-    c = check_msp_number(samples,x,fnc=bimodal,size=1000,thres_min=2.1,thres_max=2.4,n_msps=500)
+    c = check_msp_number(samples,x,fnc=likelihoods[s_args.lnprob],size=1000,thres_min=2.1,thres_max=2.4,n_msps=500)
     c = np.nan_to_num(c)
     mn, med, mx =  np.percentile(c, [16, 50, 84])
     mn = med - mn
@@ -299,24 +300,77 @@ def P_Parser():
     parser = argparse.ArgumentParser(prog='pymass.py', 
                                      description='Script for determining the distribution of NS masses using MCMC')
 
-    parser.add_argument('-d1', '--data_meas',type=str, default='msps3.txt',
+    parser.add_argument('-d1', '--data_meas',
+                        type=str, 
+                        default='msps3.txt',
                         help='File containing NS mass measurements with gaussian uncertainties. The file must have 3 columns displaying the name, mean, and standard deviation (in Solar Masses)')
-    parser.add_argument('-d2', '--data_1pk',type=str, default=None,
+
+    parser.add_argument('-d2', '--data_1pk',
+                        type=str, 
+                        default=None,
                         help='File containing the constraints on the total mass for systems that have only 1pk parameter determined \n The file must have 4 columns displaying the name, mass function, mean, and standard deviation on the Total Mass  (all in Solar Masses)')
 
-    parser.add_argument('-c', '--calc',type=bool, default=False,help='Determines whether PDFs will be calculated or not')
-    parser.add_argument('-v', '--verbose',type=bool, default=True,help='Verbosity')
-    parser.add_argument('-n', '--ntrials',type=int, default=2000,help='Determines the number of MCMC iterations')
-    parser.add_argument('-w', '--nwalkers',type=int, default=200,help='The number of MCMC walkers')
-    parser.add_argument('-o', '--output',type=str, default='chain.dat',help='Name of the output file')
-    parser.add_argument('--threads',type=int, default=4,help='Number of CPU threads to use')
-    parser.add_argument('-t', '--thin',type=int, default=10,help='MCMC thinning factor')
-    parser.add_argument('-f', '--lnprob',type=str, default='bimodal',help='Distribution to fit',
+
+    parser.add_argument('-c', '--calc',
+                        type=bool, 
+                        default=False,
+                        help='Determines whether PDFs will be calculated or not')
+
+
+    parser.add_argument('-v', '--verbose',
+                        type=int, 
+                        default=0,
+                        help='Verbosity')
+
+
+    parser.add_argument('-n', '--ntrials',
+                        type=int, 
+                        default=2000,
+                        help='Determines the number of MCMC iterations')
+
+
+    parser.add_argument('-w', '--nwalkers',
+                        type=int, 
+                        default=200,
+                        help='The number of MCMC walkers')
+
+
+    parser.add_argument('-o', '--output',
+                        type=str, 
+                        default='chain.dat',
+                        help='Name of the output file')
+
+    parser.add_argument('--threads',
+                        type=int, 
+                        default=4,
+                        help='Number of CPU threads to use')
+
+    parser.add_argument('-t', '--thin',
+                        type=int, 
+                        default=10,
+                        help='MCMC thinning factor')
+
+
+    parser.add_argument('-f', '--lnprob',
+                        type=str, 
+                        default='bimodal',
+                        help='Distribution to fit',
                         choices=['normal','bimodal','bimodal_cut','skewed_normal','skewed_normal_cut','normal_exp','gamma'])
-    parser.add_argument('-i', '--init',type=str, default="1.4,0.1,1.96,0.1,0.5",help='Initial possition for the walkers')   
-    parser.add_argument('-s', '--spread',type=float, default=1e-2,
-                        help='Factor that regulates the scatter of the walkers around the initial parameters')  
-    parser.add_argument('--plots',type=bool, default=False,
+
+
+    parser.add_argument('-i', '--init',
+                        type=str, 
+                        default="1.4,0.1,1.96,0.1,0.5",
+                        help='Initial possition for the walkers') 
+
+  
+    parser.add_argument('-s', '--spread',
+                        type=float, default=1e-2,
+                        help='Factor that regulates the scatter of the walkers around the initial parameters')
+
+  
+    parser.add_argument('--plots',
+                        type=bool, default=False,
                         help='Produce diagnostic plots at the end of the simulation') 
     return parser
 
@@ -354,14 +408,18 @@ if __name__ == "__main__":
     x = np.arange(0.3,3.03,0.0001)
     m = np.arange(0.3,4.001,0.001)
 
- 
+    verbose = s_args.verbose
+
     plt.ion()
 
 
-    pdfs, msp_names = psrpdfs(x,m,s_args.data_meas,s_args.data_1pk,calculate=s_args.calc,verbose=s_args.verbose)
-    print "Runing MCMC...."
-    print 
-    print "Number of Walkers: {0}\nNumber of Samples per Walker: {1}".format(s_args.nwalkers,s_args.ntrials)  
+    pdfs, msp_names = psrpdfs(x,m,s_args.data_meas,
+                              s_args.data_1pk,calculate=s_args.calc,
+                              verbose=s_args.verbose)
+    if verbose > 0:
+        print "Running MCMC for {0} distribution".format(s_args.lnprob)
+        print "Number of Walkers: {0}\nWill do {1} iterations".format(s_args.nwalkers,s_args.ntrials)  
+        print "Results saved to {0}".format(s_args.output)
 
     theta = map(float,s_args.init.split())
     ndim = len(theta)
@@ -370,22 +428,31 @@ if __name__ == "__main__":
     likelihood = likelihoods[s_args.lnprob]
     prior = priors[s_args.lnprob]
   
-    sampler = emcee.EnsembleSampler(s_args.nwalkers,ndim,lnprob,args=(x,pdfs,likelihood,prior),threads=s_args.threads)
+    sampler = emcee.EnsembleSampler(s_args.nwalkers,ndim,
+                                    lnprob,args=(x,pdfs,likelihood,prior),
+                                    threads=s_args.threads)
  
     f = open(s_args.output, "w")
     f.close()
+
+
 
     i = 0
     for result in sampler.sample(pos, iterations=s_args.ntrials, storechain=False,thin=s_args.thin):
         i += 1
         res = result
-        print "Iteration {0}".format(i)
         position = result[0]
         f = open(s_args.output, "a")
         for k in range(position.shape[0]):
             f.write("{0}\n".format(" ".join(map(str,position[k]))))
         f.close()
-
+        if verbose > 1:
+            prog = 100.*i/s_args.ntrials
+            sys.stdout.write('\r')
+            sys.stdout.write("[%-40s] %.1f%%" % ('='*np.int(40*prog/100.), prog))
+            sys.stdout.flush()
+    if verbose > 1:
+        sys.stdout.write("\n")
 
     samples = np.genfromtxt(open(s_args.output))
     if s_args.verbose:
@@ -398,7 +465,9 @@ if __name__ == "__main__":
         plot_dist(samples,x,fnc=likelihoods[s_args.lnprob],cum=False)
         plt.show()
 
-        fig = triangle.corner(samples[:,:],labels=label,quantiles=[0.01,0.023,0.159,0.5,0.841,0.977,0.99],plot_datapoints=False,truths=truths)
+        fig = triangle.corner(samples[:,:],labels=label,
+                              quantiles=[0.01,0.023,0.159,0.5,0.841,0.977,0.99],
+                              plot_datapoints=False,truths=truths)
         plt.show()
         fig.savefig('corner_plot.pdf')
 
