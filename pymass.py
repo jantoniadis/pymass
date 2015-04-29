@@ -236,7 +236,7 @@ def psrpdfs(x,m,filegauss,fileonepk=None,calculate=True,verbose=0):
         print
         print
         print
-        print "Loading data for pulsars with gaussian uncertainties from file {0}".format(fileonepk)
+        print "Loading data for pulsars with gaussian uncertainties from file {0}".format(filegauss)
         print
         print
         print 
